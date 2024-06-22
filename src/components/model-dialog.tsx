@@ -1,9 +1,7 @@
 import { Dialog } from "./dialog";
 
 export const SUPPORTED_MODELS = [
-  "gpt-3.5-turbo",
-  "gpt-3.5-turbo-16k",
-  "gpt-4",
+  "llama3-8b-instruct",
 ] as const;
 
 export type SupportedModels = (typeof SUPPORTED_MODELS)[number];

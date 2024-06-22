@@ -2,6 +2,7 @@ import { Analytics } from "@vercel/analytics/react";
 import classNames from "classnames";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import { Providers } from "./providers";
 
 const sans = Inter({
   subsets: ["latin"],
@@ -24,7 +25,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className="dark text-foreground bg-background">
       <body
         className={classNames(
           sans.className,
@@ -32,7 +33,7 @@ export default function RootLayout({
           monospace.variable
         )}
       >
-        {children}
+        <Providers>{children}</Providers>
         <Analytics />
       </body>
     </html>

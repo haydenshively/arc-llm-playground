@@ -1,119 +1,214 @@
 "use client";
 
-import { EmptyMessage } from "@/components/empty-message";
-import { MessageList } from "@/components/message-list";
 import {
-  ModelDialog,
-  SUPPORTED_MODELS,
-  SupportedModels,
-} from "@/components/model-dialog";
-import { Nav } from "@/components/nav";
-import { TokenDialog } from "@/components/token-dialog";
-import { useLocalStorage } from "@/hooks/use-local-storage";
-import { ANCHOR_CLASS_NAME } from "@/hooks/use-markdown-processor";
-import PaperPlaneRight from "@phosphor-icons/react/dist/icons/PaperPlaneRight";
-import { useChat } from "ai/react";
-import { useState } from "react";
+  Button,
+  Divider,
+  Modal,
+  ModalBody,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  Pagination,
+  useDisclosure,
+} from "@nextui-org/react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Puzzle } from "./api/read_puzzle/route";
+import { Annotation } from "./api/write_annotation/route";
+import { PuzzleSelectionTable } from "@/components/puzzle-selection-table";
+import { Grid } from "@/components/grid";
+import { AnnotationAccordion } from "@/components/annotation-accordion";
+import OpenAI from "openai";
 
-const parseError = (error: Error) => {
-  try {
-    return JSON.parse(error.message).error;
-  } catch (e) {
-    console.error(e);
-    return error.message;
-  }
-};
+const NUM_COMPLETIONS = 10;
 
 export default function Chat() {
-  const [tokenOpen, setTokenOpen] = useState(false);
-  const [modelOpen, setModelOpen] = useState(false);
-  const [token, setToken] = useLocalStorage<string | null>("ai-token", null);
-  const [model, setModel] = useLocalStorage<SupportedModels>(
-    "ai-model",
-    SUPPORTED_MODELS[0]
+  const [newlySelectedPuzzle, setNewlySelectedPuzzle] = useState<Set<string>>(
+    new Set([])
   );
-  const { messages, input, handleInputChange, handleSubmit, error } = useChat({
-    body: { token, model },
-  });
+  const [data, setData] = useState<{
+    puzzle: Puzzle;
+    annotation: Annotation;
+  } | null>(null);
+  const [updatedAnnotation, setUpdatedAnnotation] = useState<Annotation | null>(
+    null
+  );
+  const [completionsPage, setCompletionsPage] = useState(1);
+  const [completions, setCompletions] = useState(new Map<number, string>());
+
+  const {
+    isOpen: isSelectPuzzleModalOpen,
+    onOpen: onOpenSelectPuzzleModal,
+    onOpenChange: onOpenSelectPuzzleModalChange,
+  } = useDisclosure();
+
+  const fetchSelectedPuzzle = useCallback(() => {
+    if (newlySelectedPuzzle.size === 0) {
+      console.warn("Called `fetchSelectedPuzzle` before selecting a puzzle");
+      return;
+    }
+    let name = Array.from(newlySelectedPuzzle.values())[0];
+
+    setData(null);
+    (async () => {
+      const body = JSON.stringify({ name });
+      const res = await fetch("/api/read_puzzle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+      setData(await res.json());
+    })();
+  }, [newlySelectedPuzzle]);
+
+  console.log(completions);
+
+  // const content = useMarkdownProcessor(completions.get(0) ?? "");
+
+  useEffect(() => {
+    setCompletions(new Map());
+
+    (async () => {
+      const openai = new OpenAI({
+        baseURL: "http://localhost:3000/api/",
+        apiKey: "",
+        dangerouslyAllowBrowser: true,
+      });
+
+      // @ts-ignore
+      const stream = await openai.completions.create({
+        model: "meta-llama/Meta-Llama-3-8B",
+        prompt:
+          "Hello world, my name is Hayden and I'm a software engineer. Here's a summary of my day today:",
+        temperature: 1.2,
+        top_k: 40,
+        top_p: 0.95,
+        min_p: 0.05,
+        max_tokens: 128,
+        stream: true,
+        echo: false,
+        n: NUM_COMPLETIONS,
+      });
+      for await (const chunk of stream) {
+        // console.log(chunk);
+        setCompletions((oldCompletions) => {
+          const newCompletions = new Map(oldCompletions);
+
+          chunk.choices.forEach((choice) =>
+            newCompletions.set(
+              choice.index,
+              (newCompletions.get(choice.index) ?? "") + choice.text
+            )
+          );
+
+          return newCompletions;
+        });
+      }
+    })();
+  }, [updatedAnnotation]);
 
   return (
     <>
-      <div className="flex flex-col-reverse h-screen overflow-y-scroll">
-        <div className="mx-auto w-full px-2 lg:px-8 pb-8 flex flex-col stretch gap-8 flex-1">
-          <Nav />
-          {messages.length ? (
-            <MessageList messages={messages} />
-          ) : (
-            <EmptyMessage />
-          )}
-
-          <form onSubmit={handleSubmit} className="max-w-2xl w-full mx-auto">
-            {error ? (
-              <div className="p-3 rounded-lg bg-rose-100 border-2 border-rose-200 mb-3">
-                <p className="font-sans text-sm text-red text-rose-800">
-                  {parseError(error)}
-                </p>
-              </div>
-            ) : null}
-            <div className="relative">
-              <input
-                className="w-full border-2 border-slate-200 rounded-lg p-2 font-sans text-base outline-none ring-offset-0 focus:border-slate-400 focus-visible:ring-2 focus-visible:ring-offset-2 ring-emerald-600 transition-[box-shadow,border-color] pr-10 disabled:opacity-60 disabled:cursor-not-allowed"
-                value={input}
-                onChange={handleInputChange}
-                aria-label="ask a question"
-                placeholder="Ask a question..."
-                disabled={!token}
-              />
-              <button
-                type="submit"
-                aria-label="send"
-                className="absolute top-0 right-0 bottom-0 text-emerald-600 outline-none p-3 disabled:text-slate-600 disabled:opacity-60 disabled:cursor-not-allowed hover:text-emerald-800 focus:text-emerald-800 transition-colors"
-                disabled={!input}
-              >
-                <PaperPlaneRight size="1em" />
-              </button>
+      <div className="flex justify-center items-center">
+        <div className="mt-20 w-5/6">
+          <div className="flex justify-between items-end">
+            <h1>Puzzle {data?.puzzle.name}</h1>
+            <div className="flex justify-evenly items-end gap-2">
+              <Button onPress={onOpenSelectPuzzleModal}>Open</Button>
+              <Button>Save</Button>
+              <Button>Options</Button>
             </div>
-            <div className="mt-3 flex gap-2 justify-between">
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  className={ANCHOR_CLASS_NAME}
-                  onClick={() => setModelOpen(true)}
-                >
-                  <div className="font-sans text-xs font-medium">
-                    Change Model
-                  </div>
-                </button>
-                <p className="font-sans text-xs text-slate-500 inline-block">
-                  ({model})
-                </p>
-              </div>
-              <button
-                type="button"
-                className={ANCHOR_CLASS_NAME}
-                onClick={() => setTokenOpen(true)}
-              >
-                <div className="font-sans text-xs font-medium">
-                  {token ? "Change API Key" : "Set API Key"}
+          </div>
+          <div className="my-4 flex gap-4">
+            {data && (
+              <div className="w-3/5">
+                <div className="w-full flex overflow-auto gap-8 border-small border-foreground-300 rounded-lg p-2">
+                  {data.puzzle.train.map((example, i) => (
+                    <div key={`examples.${i}`} className="flex flex-col gap-2">
+                      <p className="text-tiny uppercase font-bold">{`Example ${
+                        i + 1
+                      }`}</p>
+                      <div className="flex gap-2">
+                        <Grid grid={example.input} />
+                        <Grid grid={example.output} />
+                      </div>
+                    </div>
+                  ))}
+                  {data.puzzle.test.map((problem, i) => (
+                    <div key={`problems.${i}`} className="flex flex-col gap-2">
+                      <p className="text-tiny uppercase font-bold text-danger-500">{`Problem ${
+                        i + 1
+                      }`}</p>
+                      <div className="flex gap-2">
+                        <Grid grid={problem.input} />
+                        <Grid grid={problem.output} />
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </button>
+                <AnnotationAccordion
+                  savedAnnotation={data.annotation}
+                  setUpdatedAnnotation={setUpdatedAnnotation}
+                />
+              </div>
+            )}
+            <div className="w-2/5 bg-slate-500 rounded-lg p-2">
+              <Pagination
+                total={NUM_COMPLETIONS}
+                color="secondary"
+                page={completionsPage}
+                onChange={setCompletionsPage}
+              />
+              {completions.get(completionsPage - 1) ?? ""}
             </div>
-          </form>
+          </div>
         </div>
       </div>
-      <TokenDialog
-        // Clear input between opening/closing.
-        key={tokenOpen.toString()}
-        open={tokenOpen}
-        setOpen={setTokenOpen}
-        setToken={setToken}
-      />
-      <ModelDialog
-        open={modelOpen}
-        setOpen={setModelOpen}
-        model={model}
-        setModel={setModel}
-      />
+      <Modal
+        hideCloseButton={true}
+        isOpen={isSelectPuzzleModalOpen}
+        onOpenChange={onOpenSelectPuzzleModalChange}
+        size="3xl"
+        backdrop="blur"
+      >
+        <ModalContent>
+          {(onClose) => (
+            <>
+              <ModalHeader className="flex flex-col gap-1">
+                Select a puzzle
+              </ModalHeader>
+              <ModalBody>
+                <PuzzleSelectionTable
+                  selectedPuzzle={newlySelectedPuzzle}
+                  setSelectedPuzzle={setNewlySelectedPuzzle}
+                />
+              </ModalBody>
+              <Divider className="mt-2" />
+              <ModalFooter>
+                <Button
+                  color="danger"
+                  variant="light"
+                  onPress={() => {
+                    setNewlySelectedPuzzle(new Set(data?.puzzle.name));
+                    onClose();
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  color="primary"
+                  onPress={() => {
+                    fetchSelectedPuzzle();
+                    onClose();
+                  }}
+                  isDisabled={newlySelectedPuzzle.size === 0}
+                >
+                  Open
+                </Button>
+              </ModalFooter>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
     </>
   );
 }
