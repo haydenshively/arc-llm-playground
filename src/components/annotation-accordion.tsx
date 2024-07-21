@@ -91,7 +91,7 @@ export function AnnotationAccordion({
               <AccordionItem key={path} aria-label={title} title={title}>
                 <div className="flex flex-col gap-2">
                   <Textarea
-                    value={textAreaTexts.get(path)}
+                    value={textAreaTexts.get(path) ?? outerValue}
                     onValueChange={(text) => {
                       const updated = new Map(textAreaTexts);
                       updated.set(path, text);
@@ -121,7 +121,7 @@ export function AnnotationAccordion({
                     return (
                       <Textarea
                         key={path}
-                        value={textAreaTexts.get(path)}
+                        value={textAreaTexts.get(path) ?? arrayItem[innerKey as keyof typeof arrayItem]}
                         onValueChange={(text) => {
                           const updated = new Map(textAreaTexts);
                           updated.set(path, text);

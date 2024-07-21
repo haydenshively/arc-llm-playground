@@ -26,6 +26,7 @@ export type Annotation = {
 
 export async function POST(req: Request) {
   const annotation = await req.json() as Annotation;
+  console.log(annotation)
 
   fs.writeFileSync(`./data/annotations/training/${annotation.name}.json`, JSON.stringify(annotation));
 

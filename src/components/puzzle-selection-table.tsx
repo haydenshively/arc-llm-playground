@@ -60,7 +60,7 @@ export const PuzzleSelectionTable = ({
         examples = {
           complete: annotation.examples.reduce(
             (prev, example) =>
-              prev + Number(Object.keys(example).every((x) => x.length > 0)),
+              prev + Number(Object.values(example).every((x) => x.length > 0)),
             0
           ),
           total: annotation.examples.length,
@@ -72,7 +72,7 @@ export const PuzzleSelectionTable = ({
         problems = {
           complete: annotation.problems.reduce(
             (prev, problem) =>
-              prev + Number(Object.keys(problem).every((x) => x.length > 0)),
+              prev + Number(Object.values(problem).every((x) => x.length > 0)),
             0
           ),
           total: annotation.problems.length,
@@ -109,7 +109,8 @@ export const PuzzleSelectionTable = ({
             total: number;
           };
           let color: "danger" | "warning" | "success" = "danger";
-          if (complete > 0 && complete < total) color = "warning";
+          if (complete === 0) color = "danger";
+          else if (complete > 0 && complete < total) color = "warning";
           else color = "success";
           return (
             <Chip color={color} size="sm" variant="flat">
@@ -117,7 +118,7 @@ export const PuzzleSelectionTable = ({
             </Chip>
           );
         case "ruleset":
-          return cellValue ? (
+          return (cellValue as string).length > 0 ? (
             <Chip
               className="capitalize"
               color="success"
